@@ -2,6 +2,8 @@ import { useState, useMemo } from "react";
 import { Link } from "react-router-dom";
 import Icon from "@/components/ui/icon";
 
+const SAVE_URL = "https://functions.poehali.dev/79019266-64a1-4d9e-b408-89058aab0d28";
+
 interface CostItem {
   id: string;
   label: string;
@@ -32,6 +34,29 @@ export default function Calculator() {
   const [costs, setCosts] = useState<CostItem[]>(DEFAULT_COSTS);
   const [yield_, setYield] = useState("");
   const [price, setPrice] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<"idle" | "success" | "error">("idle");
+
+  const saveToSheets = async () => {
+    setSaving(true);
+    setSaveStatus("idle");
+    try {
+      const costsObj: Record<string, number> = {};
+      costs.forEach((c) => { costsObj[c.id] = parseNum(c.value); });
+      const res = await fetch(SAVE_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ area: parseNum(area), costs: costsObj, yield_: parseNum(yield_), price: parseNum(price), calc }),
+      });
+      if (!res.ok) throw new Error();
+      setSaveStatus("success");
+    } catch {
+      setSaveStatus("error");
+    } finally {
+      setSaving(false);
+      setTimeout(() => setSaveStatus("idle"), 4000);
+    }
+  };
 
   const updateCost = (id: string, val: string) => {
     setCosts((prev) => prev.map((c) => (c.id === id ? { ...c, value: val } : c)));
@@ -391,6 +416,37 @@ export default function Calculator() {
                       </p>
                     </div>
                   </div>
+                </div>
+
+                {/* Save to Google Sheets */}
+                <div className="bg-card border border-border rounded p-5 flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 bg-green-100 rounded flex items-center justify-center flex-shrink-0">
+                      <Icon name="Sheet" fallback="TableProperties" size={18} className="text-green-700" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-bold text-foreground">Сохранить в Google Таблицу</p>
+                      <p className="text-xs text-muted-foreground">Расчёт добавится новой строкой</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={saveToSheets}
+                    disabled={saving}
+                    className={`flex items-center gap-2 px-5 py-2.5 rounded text-sm font-bold transition-all ${
+                      saveStatus === "success"
+                        ? "bg-green-600 text-white"
+                        : saveStatus === "error"
+                        ? "bg-red-500 text-white"
+                        : "bg-primary text-primary-foreground hover:opacity-90 active:scale-95"
+                    } disabled:opacity-60 disabled:cursor-not-allowed`}
+                  >
+                    <Icon
+                      name={saving ? "Loader" : saveStatus === "success" ? "Check" : saveStatus === "error" ? "X" : "Save"}
+                      size={15}
+                      className={saving ? "animate-spin" : ""}
+                    />
+                    {saving ? "Сохраняю..." : saveStatus === "success" ? "Сохранено!" : saveStatus === "error" ? "Ошибка" : "Сохранить"}
+                  </button>
                 </div>
               </>
             )}
