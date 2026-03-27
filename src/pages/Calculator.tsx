@@ -1,6 +1,8 @@
 import { useState, useMemo } from "react";
 import { Link } from "react-router-dom";
 import Icon from "@/components/ui/icon";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 
 const SAVE_URL = "https://functions.poehali.dev/79019266-64a1-4d9e-b408-89058aab0d28";
 
@@ -60,6 +62,73 @@ export default function Calculator() {
 
   const updateCost = (id: string, val: string) => {
     setCosts((prev) => prev.map((c) => (c.id === id ? { ...c, value: val } : c)));
+  };
+
+  const downloadPDF = () => {
+    const doc = new jsPDF();
+    const date = new Date().toLocaleDateString("ru-RU");
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(16);
+    doc.text("Kalkulyator rentabelnosti fermerskogo hozyaystva", 14, 18);
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    doc.text(`Data raschyota: ${date}`, 14, 26);
+    doc.text(`Ploshchad polya: ${area} ga   |   Urozhaynost: ${yield_} kg/ga   |   Tsena: ${price} rub/kg`, 14, 32);
+
+    doc.setFontSize(13);
+    doc.setFont("helvetica", "bold");
+    doc.text("Osnovnye pokazateli", 14, 44);
+
+    autoTable(doc, {
+      startY: 48,
+      head: [["Pokazatel", "Znachenie"]],
+      body: [
+        ["Obshchiye zatraty", `${fmt(calc.totalCosts)} rub`],
+        ["Obem proizvodstva", `${fmt(calc.totalProduction)} kg`],
+        ["Vyruchka", `${fmt(calc.revenue)} rub`],
+        ["Pribyl / Ubytok", `${calc.profit >= 0 ? "+" : ""}${fmt(calc.profit)} rub`],
+        ["Rentabelnost", `${fmt(calc.margin)}%`],
+        ["Sebestoimost 1 kg", `${fmt(calc.costPerUnit)} rub`],
+        ["Tochka bezubytochnosti", calc.breakeven > 0 ? `${fmt(calc.breakeven)} kg` : "—"],
+        ["Pribyl na 1 ga", calc.areaNum > 0 ? `${fmt(calc.profit / calc.areaNum)} rub` : "—"],
+      ],
+      styles: { fontSize: 10 },
+      headStyles: { fillColor: [34, 197, 94] },
+    });
+
+    const afterMain = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 10;
+
+    doc.setFontSize(13);
+    doc.setFont("helvetica", "bold");
+    doc.text("Struktura zatrat", 14, afterMain);
+
+    const costRows = costs
+      .filter((c) => parseNum(c.value) > 0)
+      .map((c) => {
+        const val = parseNum(c.value);
+        const pct = calc.totalCosts > 0 ? ((val / calc.totalCosts) * 100).toFixed(1) : "0";
+        return [c.label, `${fmt(val)} rub`, `${pct}%`];
+      });
+
+    autoTable(doc, {
+      startY: afterMain + 4,
+      head: [["Statya zatrat", "Summa", "Dolya"]],
+      body: costRows.length > 0 ? costRows : [["Zatraty ne ukazany", "—", "—"]],
+      styles: { fontSize: 10 },
+      headStyles: { fillColor: [34, 197, 94] },
+    });
+
+    const afterCosts = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 10;
+    doc.setFontSize(11);
+    doc.setFont("helvetica", "bold");
+    const verdict = calc.profit >= 0
+      ? `Vyvod: Proekt pribylnyy. Rentabelnost ${fmt(calc.margin)}%.`
+      : `Vyvod: Proekt ubytochnyy. Zatraty prevyshayut vyruchku na ${fmt(Math.abs(calc.profit))} rub.`;
+    doc.text(verdict, 14, afterCosts);
+
+    doc.save(`ferma_raschet_${date.replace(/\./g, "-")}.pdf`);
   };
 
   const calc = useMemo(() => {
@@ -418,6 +487,13 @@ export default function Calculator() {
                   </div>
                 </div>
 
+                <button
+                  onClick={downloadPDF}
+                  className="w-full flex items-center justify-center gap-2 px-5 py-3 rounded bg-primary text-primary-foreground text-sm font-bold hover:opacity-90 active:scale-95 transition-all"
+                >
+                  <Icon name="Download" size={16} />
+                  Скачать PDF с результатами
+                </button>
 
               </>
             )}
