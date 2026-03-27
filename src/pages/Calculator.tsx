@@ -38,6 +38,7 @@ export default function Calculator() {
   const [price, setPrice] = useState("");
   const [saving, setSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState<"idle" | "success" | "error">("idle");
+  const [pdfLoading, setPdfLoading] = useState(false);
 
   const saveToSheets = async () => {
     setSaving(true);
@@ -64,71 +65,90 @@ export default function Calculator() {
     setCosts((prev) => prev.map((c) => (c.id === id ? { ...c, value: val } : c)));
   };
 
-  const downloadPDF = () => {
-    const doc = new jsPDF();
+  const downloadPDF = async () => {
+    setPdfLoading(true);
+    const { default: jsPDFModule } = await import("jspdf");
+    const { default: autoTableModule } = await import("jspdf-autotable");
+
+    const doc = new jsPDFModule();
     const date = new Date().toLocaleDateString("ru-RU");
 
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(16);
-    doc.text("Kalkulyator rentabelnosti fermerskogo hozyaystva", 14, 18);
+    const fontUrl = "https://fonts.gstatic.com/s/roboto/v32/KFOmCnqEu92Fr1Mu4mxKKTU1Kg.woff2";
+    const fontResp = await fetch(fontUrl);
+    const fontBuffer = await fontResp.arrayBuffer();
+    const fontBase64 = btoa(String.fromCharCode(...new Uint8Array(fontBuffer)));
+    doc.addFileToVFS("Roboto-Regular.ttf", fontBase64);
+    doc.addFont("Roboto-Regular.ttf", "Roboto", "normal");
 
-    doc.setFont("helvetica", "normal");
+    const fontBoldUrl = "https://fonts.gstatic.com/s/roboto/v32/KFOlCnqEu92Fr1MmWUlfBBc4AMP6lQ.woff2";
+    const fontBoldResp = await fetch(fontBoldUrl);
+    const fontBoldBuffer = await fontBoldResp.arrayBuffer();
+    const fontBoldBase64 = btoa(String.fromCharCode(...new Uint8Array(fontBoldBuffer)));
+    doc.addFileToVFS("Roboto-Bold.ttf", fontBoldBase64);
+    doc.addFont("Roboto-Bold.ttf", "Roboto", "bold");
+
+    doc.setFont("Roboto", "bold");
+    doc.setFontSize(16);
+    doc.text("Калькулятор рентабельности фермерского хозяйства", 14, 18);
+
+    doc.setFont("Roboto", "normal");
     doc.setFontSize(10);
-    doc.text(`Data raschyota: ${date}`, 14, 26);
-    doc.text(`Ploshchad polya: ${area} ga   |   Urozhaynost: ${yield_} kg/ga   |   Tsena: ${price} rub/kg`, 14, 32);
+    doc.text(`Дата расчёта: ${date}`, 14, 27);
+    doc.text(`Площадь поля: ${area} га   |   Урожайность: ${yield_} кг/га   |   Цена: ${price} руб/кг`, 14, 33);
 
     doc.setFontSize(13);
-    doc.setFont("helvetica", "bold");
-    doc.text("Osnovnye pokazateli", 14, 44);
+    doc.setFont("Roboto", "bold");
+    doc.text("Основные показатели", 14, 45);
 
-    autoTable(doc, {
-      startY: 48,
-      head: [["Pokazatel", "Znachenie"]],
+    autoTableModule(doc, {
+      startY: 49,
+      head: [["Показатель", "Значение"]],
       body: [
-        ["Obshchiye zatraty", `${fmt(calc.totalCosts)} rub`],
-        ["Obem proizvodstva", `${fmt(calc.totalProduction)} kg`],
-        ["Vyruchka", `${fmt(calc.revenue)} rub`],
-        ["Pribyl / Ubytok", `${calc.profit >= 0 ? "+" : ""}${fmt(calc.profit)} rub`],
-        ["Rentabelnost", `${fmt(calc.margin)}%`],
-        ["Sebestoimost 1 kg", `${fmt(calc.costPerUnit)} rub`],
-        ["Tochka bezubytochnosti", calc.breakeven > 0 ? `${fmt(calc.breakeven)} kg` : "—"],
-        ["Pribyl na 1 ga", calc.areaNum > 0 ? `${fmt(calc.profit / calc.areaNum)} rub` : "—"],
+        ["Общие затраты", `${fmt(calc.totalCosts)} руб`],
+        ["Объём производства", `${fmt(calc.totalProduction)} кг`],
+        ["Выручка", `${fmt(calc.revenue)} руб`],
+        ["Прибыль / Убыток", `${calc.profit >= 0 ? "+" : ""}${fmt(calc.profit)} руб`],
+        ["Рентабельность", `${fmt(calc.margin)}%`],
+        ["Себестоимость 1 кг", `${fmt(calc.costPerUnit)} руб`],
+        ["Точка безубыточности", calc.breakeven > 0 ? `${fmt(calc.breakeven)} кг` : "—"],
+        ["Прибыль на 1 га", calc.areaNum > 0 ? `${fmt(calc.profit / calc.areaNum)} руб` : "—"],
       ],
-      styles: { fontSize: 10 },
-      headStyles: { fillColor: [34, 197, 94] },
+      styles: { fontSize: 10, font: "Roboto" },
+      headStyles: { fillColor: [34, 197, 94], font: "Roboto", fontStyle: "bold" },
     });
 
-    const afterMain = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 10;
+    const afterMain = (doc as jsPDFModule & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 10;
 
     doc.setFontSize(13);
-    doc.setFont("helvetica", "bold");
-    doc.text("Struktura zatrat", 14, afterMain);
+    doc.setFont("Roboto", "bold");
+    doc.text("Структура затрат", 14, afterMain);
 
     const costRows = costs
       .filter((c) => parseNum(c.value) > 0)
       .map((c) => {
         const val = parseNum(c.value);
         const pct = calc.totalCosts > 0 ? ((val / calc.totalCosts) * 100).toFixed(1) : "0";
-        return [c.label, `${fmt(val)} rub`, `${pct}%`];
+        return [c.label, `${fmt(val)} руб`, `${pct}%`];
       });
 
-    autoTable(doc, {
+    autoTableModule(doc, {
       startY: afterMain + 4,
-      head: [["Statya zatrat", "Summa", "Dolya"]],
-      body: costRows.length > 0 ? costRows : [["Zatraty ne ukazany", "—", "—"]],
-      styles: { fontSize: 10 },
-      headStyles: { fillColor: [34, 197, 94] },
+      head: [["Статья затрат", "Сумма", "Доля"]],
+      body: costRows.length > 0 ? costRows : [["Затраты не указаны", "—", "—"]],
+      styles: { fontSize: 10, font: "Roboto" },
+      headStyles: { fillColor: [34, 197, 94], font: "Roboto", fontStyle: "bold" },
     });
 
-    const afterCosts = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 10;
+    const afterCosts = (doc as jsPDFModule & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 10;
     doc.setFontSize(11);
-    doc.setFont("helvetica", "bold");
+    doc.setFont("Roboto", "bold");
     const verdict = calc.profit >= 0
-      ? `Vyvod: Proekt pribylnyy. Rentabelnost ${fmt(calc.margin)}%.`
-      : `Vyvod: Proekt ubytochnyy. Zatraty prevyshayut vyruchku na ${fmt(Math.abs(calc.profit))} rub.`;
+      ? `Вывод: Проект прибыльный. Рентабельность ${fmt(calc.margin)}%.`
+      : `Вывод: Проект убыточный. Затраты превышают выручку на ${fmt(Math.abs(calc.profit))} руб.`;
     doc.text(verdict, 14, afterCosts);
 
     doc.save(`ferma_raschet_${date.replace(/\./g, "-")}.pdf`);
+    setPdfLoading(false);
   };
 
   const calc = useMemo(() => {
@@ -489,10 +509,11 @@ export default function Calculator() {
 
                 <button
                   onClick={downloadPDF}
-                  className="w-full flex items-center justify-center gap-2 px-5 py-3 rounded bg-primary text-primary-foreground text-sm font-bold hover:opacity-90 active:scale-95 transition-all"
+                  disabled={pdfLoading}
+                  className="w-full flex items-center justify-center gap-2 px-5 py-3 rounded bg-primary text-primary-foreground text-sm font-bold hover:opacity-90 active:scale-95 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
                 >
-                  <Icon name="Download" size={16} />
-                  Скачать PDF с результатами
+                  <Icon name={pdfLoading ? "Loader" : "Download"} size={16} className={pdfLoading ? "animate-spin" : ""} />
+                  {pdfLoading ? "Формирую PDF..." : "Скачать PDF с результатами"}
                 </button>
 
               </>
