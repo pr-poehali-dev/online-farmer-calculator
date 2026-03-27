@@ -418,36 +418,7 @@ export default function Calculator() {
                   </div>
                 </div>
 
-                {/* Save to Google Sheets */}
-                <div className="bg-card border border-border rounded p-5 flex items-center justify-between gap-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 bg-green-100 rounded flex items-center justify-center flex-shrink-0">
-                      <Icon name="Sheet" fallback="TableProperties" size={18} className="text-green-700" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-bold text-foreground">Сохранить в Google Таблицу</p>
-                      <p className="text-xs text-muted-foreground">Расчёт добавится новой строкой</p>
-                    </div>
-                  </div>
-                  <button
-                    onClick={saveToSheets}
-                    disabled={saving}
-                    className={`flex items-center gap-2 px-5 py-2.5 rounded text-sm font-bold transition-all ${
-                      saveStatus === "success"
-                        ? "bg-green-600 text-white"
-                        : saveStatus === "error"
-                        ? "bg-red-500 text-white"
-                        : "bg-primary text-primary-foreground hover:opacity-90 active:scale-95"
-                    } disabled:opacity-60 disabled:cursor-not-allowed`}
-                  >
-                    <Icon
-                      name={saving ? "Loader" : saveStatus === "success" ? "Check" : saveStatus === "error" ? "X" : "Save"}
-                      size={15}
-                      className={saving ? "animate-spin" : ""}
-                    />
-                    {saving ? "Сохраняю..." : saveStatus === "success" ? "Сохранено!" : saveStatus === "error" ? "Ошибка" : "Сохранить"}
-                  </button>
-                </div>
+
               </>
             )}
           </div>
