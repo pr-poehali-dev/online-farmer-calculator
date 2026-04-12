@@ -7,14 +7,17 @@ interface Props {
   area: string;
   yield_: string;
   price: string;
+  taxRate: string;
   pdfLoading: boolean;
   onDownloadPDF: () => void;
 }
 
 export default function CalculatorResults({
-  calc, costs, area, yield_, price, pdfLoading, onDownloadPDF,
+  calc, costs, area, yield_, price, taxRate, pdfLoading, onDownloadPDF,
 }: Props) {
   const hasData = calc.totalCosts > 0 || calc.totalProduction > 0;
+  const taxNum = parseNum(taxRate);
+  const taxAmount = calc.profit > 0 ? calc.profit * (taxNum / 100) : 0;
 
   if (!hasData) {
     return (
@@ -51,7 +54,7 @@ export default function CalculatorResults({
             { label: "Общие затраты", value: `${fmt(calc.totalCosts)} ₽`, sub: "все расходы" },
             { label: "Выручка", value: `${fmt(calc.revenue)} ₽`, sub: "объём × цена" },
             {
-              label: "Прибыль",
+              label: "Прибыль (до налогов)",
               value: `${calc.profit >= 0 ? "+" : ""}${fmt(calc.profit)} ₽`,
               sub: calc.profit >= 0 ? "доход" : "убыток",
               highlight: true,
@@ -78,6 +81,32 @@ export default function CalculatorResults({
             </div>
           ))}
         </div>
+
+        {/* Net profit row */}
+        {taxNum > 0 && (
+          <div className="px-6 py-4 border-t border-white/10 flex items-center justify-between">
+            <div>
+              <div className="text-primary-foreground/50 text-xs uppercase tracking-wider font-mono">
+                Налог ({taxNum}%)
+              </div>
+              <div className="text-primary-foreground/70 text-sm font-mono mt-0.5">
+                −{fmt(taxAmount)} ₽
+              </div>
+            </div>
+            <div className="text-right">
+              <div className="text-primary-foreground/50 text-xs uppercase tracking-wider font-mono mb-1">
+                Чистая прибыль
+              </div>
+              <div
+                className={`text-2xl font-black font-mono ${
+                  calc.netProfit >= 0 ? "text-green-300" : "text-red-300"
+                }`}
+              >
+                {calc.netProfit >= 0 ? "+" : ""}{fmt(calc.netProfit)} ₽
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Detailed */}
@@ -104,6 +133,11 @@ export default function CalculatorResults({
               value: calc.areaNum > 0 ? `${fmt(calc.profit / calc.areaNum)} ₽` : "—",
               icon: "Layers",
             },
+            ...(taxNum > 0 ? [{
+              label: `Чистая прибыль с 1 га`,
+              value: calc.areaNum > 0 ? `${fmt(calc.netProfit / calc.areaNum)} ₽` : "—",
+              icon: "Landmark",
+            }] : []),
           ].map((r) => (
             <div key={r.label} className="px-6 py-4 flex items-center justify-between">
               <div className="flex items-center gap-3">
@@ -174,7 +208,9 @@ export default function CalculatorResults({
             </p>
             <p className={`text-xs leading-relaxed ${calc.profit >= 0 ? "text-green-700" : "text-red-600"}`}>
               {calc.profit >= 0
-                ? `Рентабельность составляет ${fmt(calc.margin)}%. При объёме ${fmt(calc.totalProduction)} кг вы получите прибыль ${fmt(calc.profit)} ₽.`
+                ? `Рентабельность ${fmt(calc.margin)}%. Прибыль до налогов — ${fmt(calc.profit)} ₽${
+                    taxNum > 0 ? `, чистая прибыль (после ${taxNum}% налога) — ${fmt(calc.netProfit)} ₽.` : "."
+                  }`
                 : `Затраты превышают выручку на ${fmt(Math.abs(calc.profit))} ₽. Снизьте расходы или увеличьте цену реализации.`}
             </p>
           </div>

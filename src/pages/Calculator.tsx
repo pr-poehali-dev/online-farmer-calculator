@@ -5,7 +5,7 @@ import CalculatorInputs from "./calculator/CalculatorInputs";
 import CalculatorResults from "./calculator/CalculatorResults";
 import type { CostItem, CalcResult } from "./calculator/types";
 
-function printPDF(area: string, yield_: string, price: string, costs: CostItem[], calc: CalcResult) {
+function printPDF(area: string, yield_: string, price: string, costs: CostItem[], calc: CalcResult, taxRate: string) {
   const date = new Date().toLocaleDateString("ru-RU");
   const costRows = costs
     .filter((c) => parseNum(c.value) > 0)
@@ -16,8 +16,11 @@ function printPDF(area: string, yield_: string, price: string, costs: CostItem[]
       return `<tr><td>${c.label}</td><td>${fmt(val)} руб</td><td>${pct}%</td></tr>`;
     }).join("");
 
+  const taxNum = parseNum(taxRate);
+  const taxAmount = calc.profit > 0 ? calc.profit * (taxNum / 100) : 0;
+
   const verdict = calc.profit >= 0
-    ? `Проект прибыльный. Рентабельность ${fmt(calc.margin)}%. При объёме ${fmt(calc.totalProduction)} кг прибыль составит ${fmt(calc.profit)} руб.`
+    ? `Проект прибыльный. Рентабельность ${fmt(calc.margin)}%. При объёме ${fmt(calc.totalProduction)} кг прибыль составит ${fmt(calc.profit)} руб. Чистая прибыль после налогов (${taxNum}%): ${fmt(calc.netProfit)} руб.`
     : `Проект убыточный. Затраты превышают выручку на ${fmt(Math.abs(calc.profit))} руб. Снизьте расходы или увеличьте цену реализации.`;
 
   const html = `
@@ -43,7 +46,7 @@ function printPDF(area: string, yield_: string, price: string, costs: CostItem[]
     </head>
     <body>
       <h1>Калькулятор рентабельности фермерского хозяйства</h1>
-      <p class="meta">Дата расчёта: ${date} &nbsp;|&nbsp; Площадь: ${area} га &nbsp;|&nbsp; Урожайность: ${yield_} кг/га &nbsp;|&nbsp; Цена: ${price} руб/кг</p>
+      <p class="meta">Дата расчёта: ${date} &nbsp;|&nbsp; Площадь: ${area} га &nbsp;|&nbsp; Урожайность: ${yield_} кг/га &nbsp;|&nbsp; Цена: ${price} руб/кг &nbsp;|&nbsp; Налог: ${taxNum}%</p>
 
       <h2>Основные показатели</h2>
       <table>
@@ -53,6 +56,8 @@ function printPDF(area: string, yield_: string, price: string, costs: CostItem[]
           <tr><td>Объём производства</td><td>${fmt(calc.totalProduction)} кг</td></tr>
           <tr><td>Выручка</td><td>${fmt(calc.revenue)} руб</td></tr>
           <tr><td>Прибыль / Убыток</td><td>${calc.profit >= 0 ? "+" : ""}${fmt(calc.profit)} руб</td></tr>
+          <tr><td>Налог (${taxNum}%)</td><td>${fmt(taxAmount)} руб</td></tr>
+          <tr><td>Чистая прибыль</td><td>${calc.netProfit >= 0 ? "+" : ""}${fmt(calc.netProfit)} руб</td></tr>
           <tr><td>Рентабельность</td><td>${fmt(calc.margin)}%</td></tr>
           <tr><td>Себестоимость 1 кг</td><td>${fmt(calc.costPerUnit)} руб</td></tr>
           <tr><td>Точка безубыточности</td><td>${calc.breakeven > 0 ? fmt(calc.breakeven) + " кг" : "—"}</td></tr>
@@ -86,28 +91,35 @@ export default function Calculator() {
   const [costs, setCosts] = useState(DEFAULT_COSTS);
   const [yield_, setYield] = useState("");
   const [price, setPrice] = useState("");
+  const [taxRate, setTaxRate] = useState("");
+  const [extraCosts, setExtraCosts] = useState<number>(0);
+
   const updateCost = (id: string, val: string) => {
     setCosts((prev) => prev.map((c) => (c.id === id ? { ...c, value: val } : c)));
   };
 
   const calc = useMemo(() => {
     const areaNum = parseNum(area);
-    const totalCosts = costs.reduce((acc, c) => acc + parseNum(c.value), 0);
+    const baseCosts = costs.reduce((acc, c) => acc + parseNum(c.value), 0);
+    const totalCosts = baseCosts + extraCosts;
     const yieldNum = parseNum(yield_);
     const priceNum = parseNum(price);
+    const taxNum = parseNum(taxRate);
 
     const totalProduction = areaNum * yieldNum;
     const revenue = totalProduction * priceNum;
     const profit = revenue - totalCosts;
+    const taxAmount = profit > 0 ? profit * (taxNum / 100) : 0;
+    const netProfit = profit - taxAmount;
     const costPerUnit = totalProduction > 0 ? totalCosts / totalProduction : 0;
     const margin = revenue > 0 ? (profit / revenue) * 100 : 0;
     const breakeven = priceNum > costPerUnit ? totalCosts / (priceNum - costPerUnit) : 0;
 
-    return { totalCosts, totalProduction, revenue, profit, costPerUnit, margin, breakeven, areaNum };
-  }, [area, costs, yield_, price]);
+    return { totalCosts, totalProduction, revenue, profit, netProfit, costPerUnit, margin, breakeven, areaNum };
+  }, [area, costs, yield_, price, taxRate, extraCosts]);
 
   const downloadPDF = () => {
-    printPDF(area, yield_, price, costs, calc);
+    printPDF(area, yield_, price, costs, calc, taxRate);
   };
 
   return (
@@ -134,6 +146,10 @@ export default function Calculator() {
             setYield={setYield}
             price={price}
             setPrice={setPrice}
+            taxRate={taxRate}
+            setTaxRate={setTaxRate}
+            extraCosts={extraCosts}
+            setExtraCosts={setExtraCosts}
             calc={calc}
           />
           <CalculatorResults
@@ -142,6 +158,7 @@ export default function Calculator() {
             area={area}
             yield_={yield_}
             price={price}
+            taxRate={taxRate}
             pdfLoading={false}
             onDownloadPDF={downloadPDF}
           />
